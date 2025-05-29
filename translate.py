@@ -9,169 +9,148 @@ import time
 from typing import Dict, List, Optional, Union
 from datetime import datetime
 
-class IntentoTranslator:
-    def __init__(self, api_key: str):
+class Translator:
+    def __init__(self):
+        # Try to find api-development.key in current or parent directory
+        key_paths = [
+            "api-development.key",  # Current directory
+            "../api-development.key",  # Parent directory
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "api-development.key")  # Absolute path from parent
+        ]
+        
+        api_key = None
+        for path in key_paths:
+            try:
+                with open(path, "r") as f:
+                    api_key = f.read().strip()
+                    break
+            except FileNotFoundError:
+                continue
+        
+        if not api_key:
+            raise FileNotFoundError("api-development.key not found in current or parent directory")
+        
         self.api_key = api_key
-        self.headers = {
-            "apikey": api_key,
-            "User-Agent": "Intento.Integration.python/1.0"
-        }
         self.base_url = "https://api.inten.to/ai/text/translate"
-        self.operations_url = "https://api.inten.to/operations"
-        self.routing_url = "https://api.inten.to/routing-designer/"
+        self.sync_url = "https://syncwrapper.inten.to/ai/text/translate"
+        self.headers = {
+            'apikey': self.api_key,
+            'Content-Type': 'application/json',
+            'User-Agent': 'Intento.Integration.WebApp/1.0'
+        }
+        # Set default provider to GPT-4
+        self.default_provider = "ai.text.translate.openai.gpt-4.translate"
+        self.default_model = "openai/gpt-4"
 
-    def get_operation_url(self, operation_id: str) -> str:
-        """Get the correct operations URL for checking status."""
-        return f"{self.operations_url}/{operation_id}"
-
-    def list_providers(self) -> None:
-        """List available translation providers."""
-        response = requests.get(self.base_url, headers=self.headers)
-        data = response.json()
-        
-        print("\nAvailable Translation Providers:")
-        print("-------------------------------")
-        for provider in data:
-            print(f"\nID: {provider.get('id')}")
-            print(f"Name: {provider.get('name')}")
-            print(f"Vendor: {provider.get('vendor')}")
-            if provider.get('description'):
-                print(f"Description: {provider.get('description')}")
-
-    def list_languages(self) -> None:
-        """List supported source and target languages."""
-        response = requests.get(
-            f"{self.base_url}/languages",
-            headers=self.headers
-        )
-        print(json.dumps(response.json(), indent=2, ensure_ascii=False))
-
-    def list_routing_profiles(self) -> None:
-        """List available Smart Routing profiles."""
-        response = requests.get(self.routing_url, headers=self.headers)
-        data = response.json()
-        
-        print("\nAvailable Smart Routing Profiles:")
-        print("--------------------------------")
-        for profile in data.get("data", []):
-            print(f"\nName: {profile.get('name')}")
-            print(f"Description: {profile.get('description')}")
-            print(f"Public: {'Yes' if profile.get('is_public') else 'No'}")
-            print(f"Active: {'Yes' if profile.get('is_active') else 'No'}")
-            if profile.get('rule_groups'):
-                print("Rules:")
-                for group in profile.get('rule_groups', []):
-                    print(f"  - {group.get('description', 'No description')}")
-
-    def estimate_tokens(self, texts: List[str]) -> int:
-        """Estimate token count from text array."""
-        total_chars = sum(len(text) for text in texts)
-        return total_chars // 4
-
-    def format_duration(self, seconds: float) -> str:
-        """Format duration in a human-readable format."""
+    def format_duration(self, seconds):
+        """Convert seconds to a human-readable format."""
         if seconds < 1:
-            return f"{seconds*1000:.0f}ms"
+            return f"{seconds * 1000:.2f}ms"
         return f"{seconds:.2f}s"
 
-    def translate(self, texts: List[str], target_lang: str = "es", 
-                 source_lang: str = "en", use_sync: bool = False,
-                 routing: Optional[str] = None,
-                 provider: Optional[str] = None) -> None:
-        """Translate text using Intento API."""
-        start_time = time.time()
+    def translate(self, text, target_lang, source_lang='', use_sync=False, routing=None, provider=None):
+        """
+        Translate text using Intento API.
         
+        Args:
+            text (str): Text to translate
+            target_lang (str): Target language code
+            source_lang (str, optional): Source language code. If empty, auto-detect will be used
+            use_sync (bool): Whether to use synchronous translation
+            routing (str, optional): Smart routing profile to use
+            provider (str, optional): Specific provider to use
+        """
+        start_time = time.time()
+
+        # Prepare the request payload
         payload = {
             "context": {
-                "text": texts[0] if len(texts) == 1 else texts,
-                "from": source_lang,
-                "to": target_lang
+                "text": [text],
+                "to": target_lang,
+                "from": source_lang
+            },
+            "service": {
+                "async": not use_sync,
+                "provider": self.default_provider,
+                "model": self.default_model
             }
         }
 
-        if provider:
+        # Override with routing or specific provider if specified
+        if routing:
             payload["service"] = {
-                "provider": provider,
-                "async": not use_sync
+                "async": not use_sync,
+                "routing": routing
             }
-        elif routing:
+        elif provider:
             payload["service"] = {
-                "routing": routing,
-                "async": not use_sync
-            }
-        else:
-            payload["service"] = {
-                "provider": "ai.text.translate.openai.gpt-4.translate",
-                "model": "openai/gpt-4",
-                "async": not use_sync
+                "async": not use_sync,
+                "provider": provider
             }
 
-        estimated_tokens = self.estimate_tokens(texts)
+        # Choose the appropriate endpoint
+        url = self.sync_url if use_sync else self.base_url
 
-        if use_sync and estimated_tokens >= 10000:
-            use_sync = False
-            payload["service"]["async"] = True
+        try:
+            # Make the translation request
+            response = requests.post(url, headers=self.headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
 
-        url = self.base_url
+            # Handle async response
+            if not use_sync:
+                operation_id = result.get('id')
+                if not operation_id:
+                    raise Exception("No operation ID received")
 
-        response = requests.post(url, headers=self.headers, json=payload)
-        response_data = response.json()
+                # Poll for results
+                while True:
+                    status_response = requests.get(
+                        f"https://api.inten.to/operations/{operation_id}",
+                        headers=self.headers
+                    )
+                    status_response.raise_for_status()
+                    status = status_response.json()
 
-        if not response_data:
-            print("Error: No response from server.")
-            sys.exit(1)
+                    if status.get('done'):
+                        result = status
+                        break
 
-        if "error" in response_data:
-            print(f"Error: {response_data['error']}")
-            sys.exit(1)
+                    time.sleep(1)  # Wait before next poll
 
-        if "results" in response_data:
-            provider_name = response_data.get('meta', {}).get('providers', [{}])[0].get('name', 'Unknown')
-            translation = json.dumps(response_data['results'], indent=2, ensure_ascii=False)
+            # Extract translation results
+            if use_sync:
+                # Handle sync response format
+                if 'results' in result:
+                    translated_text = result['results'][0]
+                    provider_info = result.get('service', {}).get('provider', {})
+                else:
+                    raise Exception("No translation results found in sync response")
+            else:
+                # Handle async response format
+                if 'response' in result and result['response']:
+                    translation_data = result['response'][0]
+                    translated_text = translation_data.get('results', [''])[0]
+                    provider_info = translation_data.get('service', {}).get('provider', {})
+                else:
+                    raise Exception("No translation results found in async response")
+            
+            # Calculate duration
             duration = time.time() - start_time
-            print(f"Provider: {provider_name}")
-            print(f"Translation: {translation}")
-            print(f"Duration: {self.format_duration(duration)}")
-            return
-
-        if not response_data.get("done", False) and "id" in response_data:
-            attempt = 0
-            max_attempts = 10
-            delay = 1
             
-            time.sleep(2)
+            # Format output
+            output = [
+                f"Provider: {provider_info.get('name', 'Unknown')} ({provider_info.get('vendor', 'Unknown')})",
+                f"Translation: {translated_text}",
+                f"Duration: {self.format_duration(duration)}"
+            ]
             
-            while attempt < max_attempts:
-                time.sleep(delay * (2 ** attempt))
-                
-                operation_url = self.get_operation_url(response_data['id'])
-                result = requests.get(operation_url, headers=self.headers)
-                result_data = result.json()
+            return '\n'.join(output)
 
-                if "error" in result_data and result_data["error"] is not None:
-                    print(f"Error: {result_data['error']}")
-                    sys.exit(1)
-
-                if result_data.get("done", False):
-                    if "response" in result_data and result_data["response"]:
-                        provider_name = result_data.get("meta", {}).get("providers", [{}])[0].get("name", "Unknown")
-                        translation = result_data["response"][0].get("results", [])[0]
-                        duration = time.time() - start_time
-                        print(f"Provider: {provider_name}")
-                        print(f"Translation: {translation}")
-                        print(f"Duration: {self.format_duration(duration)}")
-                        return
-                    else:
-                        print("Translation completed but no results found")
-                        sys.exit(1)
-
-                attempt += 1
-
-            print("Translation timed out")
-            sys.exit(1)
-        else:
-            print("Error: Unexpected response format")
-            sys.exit(1)
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Translation request failed: {str(e)}")
+        except Exception as e:
+            raise Exception(f"Translation failed: {str(e)}")
 
 def main():
     parser = argparse.ArgumentParser(description="Translation API Client")
@@ -196,14 +175,7 @@ def main():
 
     args = parser.parse_args()
 
-    try:
-        with open("api-development.key", "r") as f:
-            api_key = f.read().strip()
-    except FileNotFoundError:
-        print("Error: api-development.key file not found")
-        sys.exit(1)
-
-    translator = IntentoTranslator(api_key)
+    translator = Translator()
 
     if args.list_providers:
         translator.list_providers()

@@ -20,6 +20,7 @@
                 <div>
                     <label for="sourceLang" class="block text-sm font-medium text-gray-700 mb-2">Source Language</label>
                     <select id="sourceLang" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Auto-detect</option>
                         <option value="en">English</option>
                         <option value="es">Spanish</option>
                         <option value="fr">French</option>
@@ -37,6 +38,26 @@
                         <option value="it">Italian</option>
                     </select>
                 </div>
+            </div>
+
+            <div class="mb-4">
+                <label for="routingProfile" class="block text-sm font-medium text-gray-700 mb-2">Smart Routing Profile</label>
+                <select id="routingProfile" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="best">Best (General)</option>
+                    <option value="legal">Legal</option>
+                    <option value="colloquial">Colloquial</option>
+                    <option value="technical">Technical</option>
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label for="provider" class="block text-sm font-medium text-gray-700 mb-2">Translation Provider (Optional)</label>
+                <select id="provider" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Use Smart Routing</option>
+                    <option value="ai.text.translate.google.translate_api.v3">Google Translate</option>
+                    <option value="ai.text.translate.amazon.translate">Amazon Translate</option>
+                    <option value="ai.text.translate.openai.gpt-4.translate">OpenAI GPT-4</option>
+                </select>
             </div>
 
             <div class="mb-4">
@@ -75,6 +96,8 @@
             const sourceText = document.getElementById('sourceText').value;
             const sourceLang = document.getElementById('sourceLang').value;
             const targetLang = document.getElementById('targetLang').value;
+            const routingProfile = document.getElementById('routingProfile').value;
+            const provider = document.getElementById('provider').value;
             const translationMode = document.querySelector('input[name="translationMode"]:checked').value;
             const resultDiv = document.getElementById('result');
             const providerInfo = document.getElementById('providerInfo');
@@ -103,7 +126,9 @@
                         text: sourceText,
                         source_lang: sourceLang,
                         target_lang: targetLang,
-                        use_sync: translationMode === 'sync'
+                        use_sync: translationMode === 'sync',
+                        routing: provider ? null : routingProfile,
+                        provider: provider || null
                     })
                 });
 
@@ -112,10 +137,29 @@
                 if (data.error) {
                     resultDiv.textContent = `Error: ${data.error}`;
                 } else {
-                    const lines = data.output.split('\n');
-                    providerInfo.textContent = lines[0];
-                    translationText.textContent = lines[1].replace('Translation: ', '');
-                    durationInfo.textContent = lines[2];
+                    // Split the output into lines and remove empty lines
+                    const lines = data.output.split('\n').filter(line => line.trim());
+                    
+                    // Parse each line
+                    lines.forEach(line => {
+                        if (line.startsWith('Provider:')) {
+                            providerInfo.textContent = line;
+                        } else if (line.startsWith('Translation:')) {
+                            // Handle JSON string in translation output
+                            let translation = line.replace('Translation: ', '');
+                            try {
+                                // Try to parse if it's a JSON string
+                                const parsed = JSON.parse(translation);
+                                translation = Array.isArray(parsed) ? parsed[0] : parsed;
+                            } catch (e) {
+                                // If not JSON, use as is
+                                translation = translation.replace(/^\[|\]$/g, '');
+                            }
+                            translationText.textContent = translation;
+                        } else if (line.startsWith('Duration:')) {
+                            durationInfo.textContent = line;
+                        }
+                    });
                 }
             } catch (error) {
                 resultDiv.textContent = `Error: ${error.message}`;
