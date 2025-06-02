@@ -1,17 +1,41 @@
-# AI Translation Web Application
+# AI Translation Tool
 
-A web-based translation application that uses the Intento API to provide high-quality translations. The application supports both synchronous and asynchronous translation modes, with real-time performance tracking.
+A comprehensive translation solution that leverages the Intento API to provide high-quality translations across multiple interfaces. The project includes a command-line interface, web application, and Chrome extension for flexible translation needs.
 
-## Features
+## Overview
 
-- Web-based translation interface
-- Support for multiple languages
-- Synchronous and asynchronous translation modes
-- Real-time translation duration tracking
-- Modern, responsive UI using Tailwind CSS
-- Support for various translation providers
+This project provides three main interfaces for translation:
+
+1. **Command Line Interface (CLI)**: For quick translations and API exploration
+2. **Web Application**: A user-friendly interface for translation tasks
+3. **Chrome Extension**: For translating web pages directly in the browser
+
+## Architecture
+
+### Core Components
+
+- **Translation Engine** (`translate.py`): The core translation service that handles API communication and text processing
+- **Web Interface** (`web_test/`): Flask-based web application for browser-based translation
+- **Browser Extension** (`chrome_extension/`): Chrome extension for page translation
+
+### API Integration
+
+The project integrates with the Intento API, supporting:
+- Multiple translation providers (Google, Microsoft, OpenAI, etc.)
+- Smart routing for optimal translation quality
+- Both synchronous and asynchronous translation modes
+- Language auto-detection
+- Custom translation profiles (legal, colloquial, etc.)
 
 ## Setup
+
+### Prerequisites
+
+- Python 3.6 or higher
+- Chrome browser (for extension)
+- Intento API key
+
+### Installation
 
 1. Clone the repository:
 ```bash
@@ -30,31 +54,128 @@ source venv/bin/activate  # On Windows use: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Add your Intento API key:
-   - Create a file named `api-development.key` in the root directory
-   - Add your API key to this file
+4. Configure API key:
+   - Create `api-development.key` in the root directory
+   - Add your Intento API key to this file
 
-## Running the Application
+## Usage
 
-1. Start the web server:
+### 1. Command Line Interface
+
+The CLI provides direct access to translation features:
+
+```bash
+# Basic translation
+python translate.py --text "Hello world" --to es
+
+# Translate a text file
+python translate.py --file input.txt --to es
+
+# Translate a file and save to output file
+python translate.py --file input.txt --to es --output translated.txt
+
+# List available providers
+python translate.py --list-providers
+
+# List supported languages
+python translate.py --list-languages
+
+# Use specific provider
+python translate.py --text "Hello world" --to es --provider "ai.text.translate.google.translate_api.v3"
+
+# Use smart routing
+python translate.py --text "Hello world" --to es --routing "best_colloquial"
+```
+
+### 2. Web Application
+
+The web interface provides a user-friendly way to translate text:
+
+1. Start the server:
 ```bash
 cd web_test
 python app.py
 ```
 
-2. Open your browser and navigate to:
-```
-http://localhost:5000
-```
+2. Open `http://localhost:5000` in your browser
 
-## Usage
+Features:
+- Real-time translation
+- Provider selection
+- Smart routing profiles
+- Translation mode selection (sync/async)
+- Performance tracking
 
-1. Enter the text you want to translate
-2. Select source and target languages
-3. Choose translation mode:
-   - Async: Recommended for longer texts
-   - Sync: Faster for short texts
-4. Click "Translate" to get the translation
+### 3. Chrome Extension
+
+For translating web pages directly:
+
+1. Install the extension:
+   - Open Chrome and go to `chrome://extensions/`
+   - Enable "Developer mode"
+   - Click "Load unpacked"
+   - Select the `chrome_extension` folder
+
+2. Usage:
+   - Click the extension icon
+   - Select target language
+   - Click "Translate Page"
+
+## Advanced Features
+
+### Smart Routing
+
+The system supports intelligent routing to different translation providers based on:
+- Content type (legal, technical, colloquial)
+- Language pair
+- Quality requirements
+- Cost considerations
+
+### Translation Modes
+
+1. **Synchronous Mode**:
+   - Faster for short texts
+   - Immediate response
+   - Limited to smaller text sizes
+
+2. **Asynchronous Mode**:
+   - Better for longer texts
+   - Handles larger content
+   - Provides progress tracking
+
+### Error Handling
+
+The system includes comprehensive error handling for:
+- API connectivity issues
+- Invalid language codes
+- Provider unavailability
+- Rate limiting
+- Text size limitations
+
+## Troubleshooting
+
+### Common Issues
+
+1. **API Key Issues**:
+   - Ensure `api-development.key` exists and contains valid key
+   - Check API key permissions
+
+2. **Translation Failures**:
+   - Verify text size (use async mode for larger texts)
+   - Check language code validity
+   - Ensure provider availability
+
+3. **Web Application Issues**:
+   - Verify Flask server is running
+   - Check port availability
+   - Ensure all dependencies are installed
+
+### Debugging
+
+Enable debug mode for detailed logging:
+```bash
+python translate.py --text "Hello" --to es --trace
+```
 
 ## Project Structure
 
@@ -65,20 +186,11 @@ translate_test/
 │   ├── requirements.txt    # Web app dependencies
 │   └── templates/
 │       └── index.html      # Web interface
-├── translate.py            # Core translation functionality
-├── requirements.txt        # Main project dependencies
-└── README.md              # This file
+├── chrome_extension/       # Browser extension
+├── translate.py           # Core translation functionality
+├── requirements.txt       # Main project dependencies
+└── README.md             # Documentation
 ```
-
-## Dependencies
-
-- Flask
-- Requests
-- Python 3.6+
-
-## License
-
-MIT License
 
 ## Contributing
 
@@ -87,6 +199,14 @@ MIT License
 3. Commit your changes
 4. Push to the branch
 5. Create a new Pull Request
+
+## License
+
+MIT License
+
+## Support
+
+For issues and feature requests, please create an issue in the repository.
 
 ```bash
 # Translate text
